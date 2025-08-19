@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>癌症專科會議議程海報製作器（多PNG、可調層級、解鎖比例、裁切）</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Microsoft JhengHei','Arial',sans-serif; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); min-height:100vh; padding:20px; }
+    .container { max-width: 1400px; margin:0 auto; background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,.3); overflow:hidden; }
+    .header { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; padding:30px; text-align:center; }
+    .main-content { display:flex; height:800px; }
+    .control-panel { width:460px; padding:24px 20px; background:#f8f9fa; overflow-y:auto; border-right:2px solid #e0e0e0; }
+    .canvas-container { flex:1; padding:30px; display:flex; flex-direction:column; align-items:center; background:#fff; overflow-y:auto; max-height:800px; }
+    canvas { border:2px solid #e0e0e0; box-shadow:0 10px 30px rgba(0,0,0,.1); border-radius:10px; background:#fff; touch-action:none; }
+    .section-title { font-size:18px; font-weight:600; color:#333; margin:8px 0 12px; padding-bottom:10px; border-bottom:2px solid #e0e0e0; }
+    .form-group { margin-bottom:14px; }
+    label { display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:14px; }
+    input,select,textarea { width:100%; padding:10px; border:2px solid #e0e0e0; border-radius:8px; font-size:14px; transition:all .2s; font-family:'Microsoft JhengHei','Arial',sans-serif; }
+    input:focus,select:focus,textarea:focus { outline:none; border-color:#667eea; box-shadow:0 0 0 3px rgba(102,126,234,.12); }
+    .btn { padding:9px 12px; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s; margin:4px 4px; }
+    .btn-primary { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; }
+    .btn-secondary { background:#6c757d; color:#fff; }
+    .btn-danger { background:#dc3545; color:#fff; }
+    .btn-ghost { background:#fff; color:#333; border:2px solid #e0e0e0; }
+    .row { display:flex; gap:10px; align-items:center; }
+    .row > * { flex:1; }
+    .template-selector { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:8px; }
+    .template-btn { padding:16px; border:3px solid #e0e0e0; border-radius:12px; cursor:pointer; transition:all .2s; text-align:center; background:#fff; }
+    .template-btn:hover { border-color:#667eea; transform:translateY(-2px); box-shadow:0 5px 15px rgba(102,126,234,.2);} 
+    .template-btn.active { border-color:#667eea; background: linear-gradient(135deg, rgba(102,126,234,.08) 0%, rgba(118,75,162,.08) 100%);} 
+    .agenda-items { max-height:260px; overflow-y:auto; border:2px solid #e0e0e0; border-radius:8px; padding:12px; background:#fff; }
+    .agenda-item { padding:12px; margin-bottom:8px; background:#f8f9fa; border-radius:8px; border-left:4px solid #667eea; position:relative; }
+    .agenda-item .controls { position:absolute; top:10px; right:10px; display:flex; gap:6px; }
+
+    /* === Tabs 面板分頁 === */
+    .tabs { display:flex; gap:6px; margin-bottom:12px; }
+    .tab-btn { flex:1; padding:10px; border:none; border-radius:8px; cursor:pointer; font-weight:600; background:#e0e0e0; }
+    .tab-btn.active { background:#667eea; color:#fff; }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    /* === PNG 圖層清單 === */
+    .overlay-list { max-height:260px; overflow:auto; border:2px solid #e0e0e0; border-radius:8px; background:#fff; }
+    .overlay-item { display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid #eee; cursor:pointer; }
+    .overlay-item.active { background:#e9f0ff; }
+    .overlay-thumb { width:38px; height:38px; border-radius:6px; border:1px solid #ddd; background-size:cover; background-position:center; }
+    .overlay-name { flex:1; font-size:12px; color:#333; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .overlay-actions { display:flex; gap:6px; }
+    .mini-hint { font-size:12px; color:#666; line-height:1.4; }
+
+    /* === 裁切視窗 === */
+    .cropper-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:9999; }
+    .cropper-modal { background:#fff; width:min(92vw, 980px); border-radius:14px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.4); }
+    .cropper-header { padding:14px 16px; background:#111827; color:#fff; font-weight:700; }
+    .cropper-body { padding:16px; }
+    #cropperCanvas { border:1px solid #e5e7eb; display:block; width:100%; height:auto; background:#fff; }
+    .cropper-footer { display:flex; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:1px solid #eee; }
+
+    /* 自訂配色專區 */
+    .custom-colors-section { display:none; margin-top:10px; padding:15px; background:#f8f9fa; border-radius:8px; border:2px solid #e0e0e0; }
+    .custom-colors-section.show { display:block; }
+    .color-group { margin-bottom:10px; }
+    .color-group label { font-size:13px; margin-bottom:4px; }
+    .four-color-row { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .three-color-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .two-color-row { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+
+    /* 多行輸入框樣式 */
+    .multiline-input { min-height:60px; resize:vertical; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎗️ 癌症專科會議議程海報製作器</h1>
+      <p style="margin-top:10px;opacity:.9;">開發者：Tom Ho</p>
+    </div>
+    <div class="main-content">
+      <div class="control-panel">
+        <!-- 分頁標籤 -->
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="tab-content">📋 會議內容編輯區</button>
+          <button class="tab-btn" data-tab="tab-style">🎨 海報風格設計區</button>
+          <button class="tab-btn" data-tab="tab-file">📂 檔案匯入與匯出區</button>
+        </div>
+  
+        <!-- 會議內容編輯區 -->
+        <div id="tab-content" class="tab-panel active">
+          <h2 class="section-title">📋 基本資訊</h2>
+          <div class="form-group"><label>會議標題</label><input id="conferenceTitle" type="text" placeholder="例：2025年度癌症醫學研討會" /></div>
+          <div class="form-group"><label>副標題</label><input id="conferenceSubtitle" type="text" value="肺癌治療新進展論壇" /></div>
+          <div class="form-group"><label>日期</label><input id="conferenceDate" type="text" placeholder="例：2025年8月15日" /></div>
+          <div class="form-group"><label>地點</label><input id="conferenceLocation" type="text" value="台北國際會議中心" /></div>
+  
+          <h2 class="section-title">🎗️ 癌症專科</h2>
+          <div class="template-selector">
+            <div class="template-btn active" data-template="lung"><div style="font-size:24px;">🫁</div><div>肺癌</div></div>
+            <div class="template-btn" data-template="headneck"><div style="font-size:24px;">👤</div><div>頭頸癌</div></div>
+            <div class="template-btn" data-template="uterus"><div style="font-size:24px;">♀️</div><div>子宮體癌</div></div>
+            <div class="template-btn" data-template="urinary"><div style="font-size:24px;">🩺</div><div>泌尿道癌</div></div>
+            <div class="template-btn" data-template="colorectal"><div style="font-size:24px;">🩻</div><div>大腸直腸癌</div></div>
+            <div class="template-btn" data-template="breast"><div style="font-size:24px;">🎗️</div><div>乳癌</div></div>
+          </div>
+  
+          <h2 class="section-title">📅 議程項目</h2>
+          <div class="form-group"><label>時間</label><input id="agendaTime" placeholder="例：09:00-09:30" type="text" /></div>
+          <div class="form-group"><label>主題（可按Enter換行）</label><textarea id="agendaTopic" class="multiline-input" placeholder="例：開幕致詞"></textarea></div>
+          <div class="form-group"><label>講者（可按Enter換行）</label><textarea id="agendaSpeaker" class="multiline-input" placeholder="例：王教授"></textarea></div>
+          <div class="form-group"><label>主持人（可按Enter換行）</label><textarea id="agendaModerator" class="multiline-input" placeholder="例：李醫師"></textarea></div>
+          <div class="row">
+            <button class="btn btn-primary" id="agendaAdd">➕ 新增</button>
+            <button class="btn btn-secondary" id="agendaSample">📋 載入範例</button>
+            <button class="btn btn-secondary" id="agendaClear">🗑️ 清空</button>
+          </div>
+          <div id="agendaList" class="agenda-items"></div>
+  
+          <h2 class="section-title">📝 頁尾註解</h2>
+          <div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-weight:600;"><input type="checkbox" id="showFooterNote" checked style="width:auto;"/>顯示頁尾註解</label></div>
+          <div class="form-group"><textarea id="footerNoteContent" rows="6" style="resize:vertical;font-size:12px;line-height:1.4;">本會議是醫藥學術會議,與會者皆是醫療專業人員,眷屬不適合參加,本公司亦不會支付眷屬費用。此外,為使與會醫療專業人員享有高質量專業的學術會議。當需要時,本公司會安排特約廠商到場協助接待及做會議紀錄。廠商與默沙東公司簽有服務保密條款,並承諾廠商代表在執行服務時,會議仍順暢進行。如有不便之處,敬請見諒。</textarea></div>
+        </div>
+  
+        <!-- 海報風格設計區 -->
+        <div id="tab-style" class="tab-panel">
+          <h2 class="section-title">🎨 配色方案</h2>
+          <div class="row">
+            <select id="colorScheme">
+              <option value="medical_green">經典醫療綠</option>
+              <option value="business_green">專業商務綠</option>
+              <option value="tech_green">現代科技綠</option>
+              <option value="custom">自訂配色</option>
+            </select>
+            <select id="gradientDir">
+              <option value="horizontal">水平</option>
+              <option value="vertical">垂直</option>
+              <option value="diagonal">對角</option>
+            </select>
+          </div>
+          <div id="customColorsSection" class="custom-colors-section">
+            <div class="color-group">
+              <label>🌟 標題漸層色彩（三色）</label>
+              <div class="three-color-row">
+                <input type="color" id="headerC1" value="#1B4D3E" title="標題色1">
+                <input type="color" id="headerC2" value="#2D8659" title="標題色2">
+                <input type="color" id="headerC3" value="#4CAF85" title="標題色3">
+              </div>
+            </div>
+            
+            <div class="color-group">
+              <label>📄 議程區域配色（三色）</label>
+              <div class="three-color-row">
+                <input type="color" id="agendaBg" value="#E8F5E8" title="議程背景色">
+                <input type="color" id="agendaBorder" value="#1B4D3E" title="議程邊框色">
+                <input type="color" id="agendaAccent" value="#2D8659" title="議程重點色">
+              </div>
+            </div>
+  
+            <div class="color-group">
+              <label>🖼️ 海報底色漸層（雙色）</label>
+              <div class="two-color-row">
+                <input type="color" id="bgC1" value="#ffffff" title="底色1">
+                <input type="color" id="bgC2" value="#f8f9fa" title="底色2">
+              </div>
+            </div>
+            
+            <div class="row">
+              <label>底色漸層方向</label>
+              <select id="bgGradientDir">
+                <option value="horizontal">水平</option>
+                <option value="vertical">垂直</option>
+                <option value="diagonal">對角</option>
+                <option value="radial">放射狀</option>
+                <option value="none">無漸層</option>
+              </select>
+            </div>
+  
+            <button class="btn btn-primary" id="applyCustomColors" style="width:100%; margin-top:10px;">🎨 套用自訂配色</button>
+          </div>
+  
+          <h2 class="section-title">🖼️ PNG 圖層</h2>
+          <div class="form-group">
+            <label>選擇 PNG 檔（可多選，透明背景最佳）</label>
+            <input id="overlayFile" type="file" accept="image/png" multiple />
+            <div class="mini-hint">點擊清單選取；拖曳畫布移動；角落縮放；上方圓點旋轉。支援多物件與層級調整。</div>
+          </div>
+          <div id="overlayList" class="overlay-list" aria-label="PNG 圖層清單"></div>
+          <div class="row" style="margin-top:6px;">
+            <button class="btn btn-secondary" id="bringFront">⬆️ 最上</button>
+            <button class="btn btn-secondary" id="bringForward">🔼 上移</button>
+            <button class="btn btn-secondary" id="sendBackward">🔽 下移</button>
+            <button class="btn btn-secondary" id="sendBack">⬇️ 最下</button>
+          </div>
+          <div class="row" style="margin-top:6px;">
+            <label style="flex:none;width:88px;">透明度</label>
+            <input id="overlayOpacity" type="range" min="0" max="1" step="0.01" value="1" />
+          </div>
+          <div class="row" style="margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:6px;flex:1;">
+              <input id="overlayVisible" type="checkbox" checked style="width:auto;"> 顯示
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;flex:1;">
+              <input id="overlayLockAspect" type="checkbox" checked style="width:auto;"> 鎖定比例
+            </label>
+          </div>
+          <div class="row" style="margin-top:6px;">
+            <button class="btn btn-secondary" id="centerOverlay">置中</button>
+            <button class="btn btn-secondary" id="resetOverlay">重設大小/角度</button>
+            <button class="btn btn-danger" id="removeOverlay">移除</button>
+          </div>
+          <div class="row" style="margin-top:6px;">
+            <button class="btn btn-primary" id="openCropper">✂️ 裁切</button>
+            <button class="btn btn-ghost" id="resetCrop">還原裁切</button>
+          </div>
+        </div>
+  
+        <!-- 檔案匯入與匯出區 -->
+        <div id="tab-file" class="tab-panel">
+          <h2 class="section-title">📂 匯入 / 匯出狀態</h2>
+          <div class="row" style="margin-top:6px;">
+            <button class="btn btn-secondary" onclick="exportState()">📤 匯出 JSON 狀態</button>
+            <button class="btn btn-secondary" onclick="importState()">📥 匯入 JSON 狀態</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <div class="canvas-area"><canvas id="posterCanvas" width="800" height="600"></canvas></div>
+        <div style="display:flex; gap:10px; margin-top:16px; justify-content:center;">
+          <button class="btn btn-primary" id="btnUpdate">🔄 更新海報</button>
+          <button class="btn btn-secondary" id="btnDownload">💾 下載海報</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 裁切器 Modal -->
+  <div id="cropperBackdrop" class="cropper-backdrop">
+    <div class="cropper-modal">
+      <div class="cropper-header">PNG 圖層裁切</div>
+      <div class="cropper-body">
+        <canvas id="cropperCanvas" width="900" height="600"></canvas>
+        <div class="mini-hint" style="margin-top:8px;">拖曳框線或角點調整範圍；拖曳框中心可移動整個裁切框。裁切框以「原圖像素」計算，套用後會即時反映在右側預覽。</div>
+      </div>
+      <div class="cropper-footer">
+        <button class="btn btn-ghost" id="closeCropper">關閉</button>
+        <button class="btn btn-secondary" id="resetCropper">重置框</button>
+        <button class="btn btn-primary" id="applyCropper">套用裁切</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== 全域狀態（議程/樣式）======
+    let agendaItems = [];
+    let currentTemplate = 'lung';
+    let currentColorScheme = 'medical_green';
+    let currentGradientDirection = 'horizontal';
+    
+    // 擴展自訂顏色物件
+    let customColors = { 
+      // 標題區域
+      headerC1:'#1B4D3E', headerC2:'#2D8659', headerC3:'#4CAF85',
+      // 議程區域  
+      agendaBg:'#E8F5E8', agendaBorder:'#1B4D3E', agendaAccent:'#2D8659',
+      // 海報底色
+      bgC1:'#ffffff', bgC2:'#f8f9fa', bgGradientDir:'none'
+    };
+
+    const colorSchemes = {
+      medical_green:{ name:'經典醫療綠', header:{ colors:['#1B4D3E','#2D8659','#4CAF85'], text:'#FFFFFF' }, agenda:{ background:'#E8F5E8', border:'#1B4D3E', accent:'#2D8659' } },
+      business_green:{ name:'專業商務綠', header:{ colors:['#1B4D3E','#2F5233','#B8860B'], text:'#FFFFFF' }, agenda:{ background:'#F0F4F0', border:'#2F5233', accent:'#1B4D3E' } },
+      tech_green:{ name:'現代科技綠', header:{ colors:['#1B4D3E','#1E6B7A','#4A9EFF'], text:'#FFFFFF' }, agenda:{ background:'#E6F3FF', border:'#1E6B7A', accent:'#1B4D3E' } },
+      custom:{ name:'自訂配色', 
+        header:{ colors:[customColors.headerC1,customColors.headerC2,customColors.headerC3], text:'#FFFFFF' }, 
+        agenda:{ background:customColors.agendaBg, border:customColors.agendaBorder, accent:customColors.agendaAccent } 
+      }
+    };
+    
+    const gradientDirections = { 
+      horizontal:{x1:0,y1:0,x2:1,y2:0}, 
+      vertical:{x1:0,y1:0,x2:0,y2:1}, 
+      diagonal:{x1:0,y1:0,x2:1,y2:1},
+      radial: 'radial' // 特殊標記，表示使用放射狀漸層
+    };
+    
+    const templates = {
+      lung:{ icon:'🫁', title:'肺癌', color:'#4A90E2', sampleItems:[
+        {time:'08:30-09:00',topic:'報到註冊',speaker:'',moderator:''},
+        {time:'09:00-09:30',topic:'肺癌篩檢最新進展',speaker:'胸腔科主任',moderator:'呼吸治療師'},
+        {time:'09:30-10:30',topic:'免疫治療在肺癌的應用',speaker:'腫瘤科醫師',moderator:'內科醫師'},
+        {time:'10:30-11:00',topic:'茶歇時間',speaker:'',moderator:''},
+        {time:'11:00-12:00',topic:'精準醫療與基因檢測',speaker:'病理科教授',moderator:'分子診斷專家'} ] },
+      headneck:{ icon:'👤', title:'頭頸癌', color:'#E74C3C', sampleItems:[
+        {time:'08:30-09:00',topic:'報到註冊',speaker:'',moderator:''},
+        {time:'09:00-09:30',topic:'頭頸癌早期診斷策略',speaker:'耳鼻喉科主任',moderator:'影像醫學科醫師'},
+        {time:'09:30-10:30',topic:'放射治療新技術',speaker:'放射腫瘤科醫師',moderator:'物理師'},
+        {time:'10:30-11:00',topic:'休息時間',speaker:'',moderator:''},
+        {time:'11:00-12:00',topic:'重建手術案例討論',speaker:'整形外科教授',moderator:'頭頸外科醫師'} ] },
+      uterus:{ icon:'♀️', title:'子宮體癌', color:'#FF69B4', sampleItems:[
+        {time:'08:30-09:00',topic:'報到註冊',speaker:'',moderator:''},
+        {time:'09:00-09:30',topic:'子宮內膜癌分期與治療',speaker:'婦產科主任',moderator:'病理科醫師'},
+        {time:'09:30-10:30',topic:'微創手術技術進展',speaker:'婦癌科醫師',moderator:'麻醉科醫師'},
+        {time:'10:30-11:00',topic:'茶歇',speaker:'',moderator:''},
+        {time:'11:00-12:00',topic:'荷爾蒙治療與追蹤',speaker:'內分泌科教授',moderator:'婦產科醫師'} ] },
+      urinary:{ icon:'🩺', title:'泌尿道癌', color:'#3498DB', sampleItems:[
+        {time:'08:30-09:00',topic:'報到註冊',speaker:'',moderator:''},
+        {time:'09:00-09:30',topic:'膀胱癌診斷與分期',speaker:'泌尿科主任',moderator:'影像醫學科醫師'},
+        {time:'09:30-10:30',topic:'腎臟癌標靶治療',speaker:'腫瘤科醫師',moderator:'藥劑師'},
+        {time:'10:30-11:00',topic:'休息時間',speaker:'',moderator:''},
+        {time:'11:00-12:00',topic:'攝護腺癌荷爾蒙治療',speaker:'泌尿腫瘤科教授',moderator:'泌尿科醫師'} ] },
+      colorectal:{ icon:'🩻', title:'大腸直腸癌', color:'#F39C12', sampleItems:[
+        {time:'08:30-09:00',topic:'報到註冊',speaker:'',moderator:''},
+        {time:'09:00-09:30',topic:'大腸癌篩檢與預防',speaker:'大腸直腸外科主任',moderator:'家醫科醫師'},
+        {time:'09:30-10:30',topic:'腹腔鏡手術技術',speaker:'外科醫師',moderator:'手術室護理師'},
+        {time:'10:30-11:00',topic:'茶歇時間',speaker:'',moderator:''},
+        {time:'11:00-12:00',topic:'轉移性大腸癌治療策略',speaker:'腫瘤科教授',moderator:'臨床藥師'} ] },
+      breast:{ icon:'🎗️', title:'乳癌', color:'#E91E63', sampleItems:[
+        {time:'08:30-09:00',topic:'報到註冊',speaker:'',moderator:''},
+        {time:'09:00-09:30',topic:'乳癌基因檢測與風險評估',speaker:'乳房外科主任',moderator:'遺傳諮詢師'},
+        {time:'09:30-10:30',topic:'HER2陽性乳癌治療',speaker:'腫瘤科醫師',moderator:'乳房專科護理師'},
+        {time:'10:30-11:00',topic:'休息時間',speaker:'',moderator:''},
+        {time:'11:00-12:00',topic:'乳房重建與美容',speaker:'整形外科教授',moderator:'乳癌病友代表'} ] }
+    };
+
+    // ====== PNG 圖層狀態 ======
+    let overlays = []; // 由下到上排序（陣列尾端代表最上層）
+    let selectedOverlayIndex = -1;
+
+    // ====== 輔助 ======
+    function getCanvas(){ return document.getElementById('posterCanvas'); }
+    function getCtx(){ return getCanvas().getContext('2d'); }
+    function createGradient(ctx, w, h, colors, direction){ 
+      if (direction === 'radial') {
+        const centerX = w / 2;
+        const centerY = h / 2;
+        const radius = Math.max(w, h) / 2;
+        const g = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        colors.forEach((c,i)=>g.addColorStop(i/(colors.length-1), c)); 
+        return g;
+      } else {
+        const d = gradientDirections[direction]; 
+        const g = ctx.createLinearGradient(d.x1*w,d.y1*h,d.x2*w,d.y2*h); 
+        colors.forEach((c,i)=>g.addColorStop(i/(colors.length-1), c)); 
+        return g;
+      }
+    }
+
+    // ====== 議程 UI ======
+    function refreshAgendaList(){ 
+      const list = document.getElementById('agendaList'); 
+      list.innerHTML = ''; 
+      agendaItems.forEach((it,idx)=>{
+        const d=document.createElement('div'); 
+        d.className='agenda-item'; 
+        d.innerHTML = `
+          <div class="controls">
+            <button class="btn btn-ghost" onclick="editAgenda(${idx})">✏️</button>
+            <button class="btn btn-danger" onclick="delAgenda(${idx})">✕</button>
+          </div>
+          <div style='font-weight:700;color:#667eea;'>${it.time}</div>
+          <div><strong>${it.topic.replace(/\n/g, '<br>')}</strong></div>
+          ${it.speaker?`<div>講者：${it.speaker.replace(/\n/g, '<br>')}</div>`:''}
+          ${it.moderator?`<div>主持人：${it.moderator.replace(/\n/g, '<br>')}</div>`:''}
+        `; 
+        list.appendChild(d); 
+      }); 
+    }
+    
+    window.editAgenda = function(i){ 
+      const it=agendaItems[i]; 
+      document.getElementById('agendaTime').value=it.time; 
+      document.getElementById('agendaTopic').value=it.topic; 
+      document.getElementById('agendaSpeaker').value=it.speaker||''; 
+      document.getElementById('agendaModerator').value=it.moderator||''; 
+      document.getElementById('agendaAdd').textContent='💾 更新'; 
+      document.getElementById('agendaAdd').dataset.edit=i; 
+    }
+    
+    window.delAgenda = function(i){ 
+      if(confirm('確定刪除這個議程項目？')){ 
+        agendaItems.splice(i,1); 
+        refreshAgendaList(); 
+        updatePoster(); 
+      } 
+    }
+
+    // ====== PNG 圖層：建立/UI ======
+    function newOverlayFromImage(img, name, src){
+      const c=getCanvas();
+      const ov = {
+        id: Date.now()+Math.random(),
+        name: name || 'overlay.png',
+        img, src: src||'',
+        x: c.width/2, y: c.height/2,
+        w: img.naturalWidth || img.width,
+        h: img.naturalHeight || img.height,
+        scaleX: Math.max(0.05, (c.width*0.4)/(img.naturalWidth||img.width)),
+        scaleY: Math.max(0.05, (c.width*0.4)/(img.naturalWidth||img.width)),
+        rotation: 0,
+        opacity: 1,
+        visible: true,
+        lockAspect: true,
+        crop: {x:0, y:0, w: img.naturalWidth||img.width, h: img.naturalHeight||img.height}
+      };
+      overlays.push(ov); selectedOverlayIndex = overlays.length-1; refreshOverlayList(); syncOverlayControls(); updatePoster();
+    }
+
+    function refreshOverlayList(){ const list = document.getElementById('overlayList'); list.innerHTML=''; overlays.forEach((ov, idx)=>{
+      const item = document.createElement('div'); item.className = 'overlay-item'+(idx===selectedOverlayIndex?' active':'');
+      item.onclick = ()=>{ selectedOverlayIndex = idx; refreshOverlayList(); syncOverlayControls(); updatePoster(); };
+      const thumb = document.createElement('div'); thumb.className='overlay-thumb'; thumb.style.backgroundImage = `url(${ov.src})`;
+      const name = document.createElement('div'); name.className='overlay-name'; name.textContent = ov.name;
+      const actions = document.createElement('div'); actions.className='overlay-actions';
+      const eye = document.createElement('button'); eye.className='btn btn-ghost'; eye.textContent = ov.visible?'👁️':'🚫'; eye.title='顯示/隱藏'; eye.onclick=(e)=>{ e.stopPropagation(); ov.visible=!ov.visible; syncOverlayControls(); updatePoster(); refreshOverlayList(); };
+      const del = document.createElement('button'); del.className='btn btn-danger'; del.textContent='✕'; del.title='刪除'; del.onclick=(e)=>{ e.stopPropagation(); if(confirm('刪除此 PNG 圖層？')){ overlays.splice(idx,1); if(selectedOverlayIndex>=overlays.length) selectedOverlayIndex=overlays.length-1; refreshOverlayList(); syncOverlayControls(); updatePoster(); } };
+      actions.appendChild(eye); actions.appendChild(del);
+      item.appendChild(thumb); item.appendChild(name); item.appendChild(actions);
+      list.appendChild(item);
+    });
+    }
+
+    function syncOverlayControls(){ const ov = overlays[selectedOverlayIndex];
+      const has = !!ov; document.getElementById('overlayOpacity').disabled = !has;
+      document.getElementById('overlayVisible').disabled = !has; document.getElementById('overlayLockAspect').disabled = !has;
+      document.getElementById('centerOverlay').disabled = !has; document.getElementById('resetOverlay').disabled=!has; document.getElementById('removeOverlay').disabled=!has;
+      document.getElementById('openCropper').disabled=!has; document.getElementById('resetCrop').disabled=!has;
+      if(!has) return;
+      document.getElementById('overlayOpacity').value = ov.opacity; document.getElementById('overlayVisible').checked = ov.visible; document.getElementById('overlayLockAspect').checked = ov.lockAspect;
+    }
+
+    // ====== 文字處理函數（支援手動換行且每行都居中對齊）======
+    function calculateTextLinesWithBreaks(ctx, text, maxWidth) {
+      if (!text) return 1;
+      const manualLines = text.split('\n');
+      let totalLines = 0;
+      
+      manualLines.forEach(line => {
+        if (!line.trim()) {
+          totalLines += 1;
+          return;
+        }
+        
+        const isC = /[\u4e00-\u9fff]/.test(line);
+        const words = isC ? line.split('').filter(c => c.trim() !== '') : line.split(' ');
+        let currentLine = '';
+        let lineCount = 0;
+        
+        for (let i = 0; i < words.length; i++) {
+          const test = isC ? currentLine + words[i] : currentLine + words[i] + ' ';
+          if (ctx.measureText(test).width > maxWidth && currentLine !== '') {
+            lineCount++;
+            currentLine = isC ? words[i] : words[i] + ' ';
+          } else {
+            currentLine = test;
+          }
+        }
+        if (currentLine.trim() !== '') lineCount++;
+        totalLines += Math.max(1, lineCount);
+      });
+      
+      return totalLines;
+    }
+
+function wrapTextWithBreaks(ctx, text, x, y, maxWidth, lineHeight, align = 'left') {
+  if (!text) return 0;
+  const manualLines = text.split('\n');
+  let currentY = y;
+  
+  manualLines.forEach(line => {
+    if (!line.trim()) {
+      currentY += lineHeight;
+      return;
+    }
+    
+    const isC = /[\u4e00-\u9fff]/.test(line);
+    const words = isC ? line.split('').filter(c => c.trim() !== '') : line.split(' ');
+    let currentLine = '';
+    let linesToDraw = [];
+    
+    for (let i = 0; i < words.length; i++) {
+      const test = isC ? currentLine + words[i] : currentLine + words[i] + ' ';
+      if (ctx.measureText(test).width > maxWidth && currentLine !== '') {
+        linesToDraw.push(currentLine.trim());
+        currentLine = isC ? words[i] : words[i] + ' ';
+      } else {
+        currentLine = test;
+      }
+    }
+    if (currentLine.trim() !== '') linesToDraw.push(currentLine.trim());
+    
+    linesToDraw.forEach(lineText => {
+      let drawX = x;
+      if (align === 'center') {
+        const textWidth = ctx.measureText(lineText).width;
+        drawX = x + (maxWidth / 2) - (textWidth / 2);  // 修改這行
+      } else if (align === 'right') {
+        const textWidth = ctx.measureText(lineText).width;
+        drawX = x + maxWidth - textWidth;
+      }
+      ctx.fillText(lineText, drawX, currentY);
+      currentY += lineHeight;
+    });
+  });
+  
+  return currentY - y;
+}
+
+    function drawCenteredTextWithBreaks(ctx, text, x, y, maxWidth, lineHeight, cellHeight, align = 'center') {
+      if (!text) return 0;
+      
+      const totalLines = calculateTextLinesWithBreaks(ctx, text, maxWidth);
+      const textHeight = totalLines * lineHeight;
+      const startY = y + (cellHeight - textHeight) / 2 + lineHeight * 0.8; // 垂直居中並調整基線
+      
+      return wrapTextWithBreaks(ctx, text, x, startY, maxWidth, lineHeight, align);
+    }
+
+    function drawCancerDecorations(ctx, template, canvas){ try{ const scheme = getActiveColorScheme(); ctx.globalAlpha=.15; ctx.fillStyle=scheme.agenda.accent; ctx.strokeStyle=scheme.agenda.accent; switch(template.title){ case '肺癌': ctx.beginPath(); ctx.arc(canvas.width-100,300,40,0,Math.PI*2); ctx.stroke(); ctx.beginPath(); ctx.arc(canvas.width-60,300,35,0,Math.PI*2); ctx.stroke(); break; case '頭頸癌': ctx.beginPath(); ctx.arc(canvas.width-100,280,30,0,Math.PI); ctx.stroke(); ctx.fillRect(canvas.width-110,310,20,40); break; case '子宮體癌': for(let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(canvas.width-150+i*20,300,8,0,Math.PI*2); ctx.fill(); } break; case '泌尿道癌': ctx.beginPath(); ctx.ellipse(canvas.width-100,300,25,40,0,0,Math.PI*2); ctx.stroke(); break; case '大腸直腸癌': ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(canvas.width-150,250); ctx.quadraticCurveTo(canvas.width-100,300,canvas.width-50,350); ctx.stroke(); break; case '乳癌': ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(canvas.width-120,280); ctx.quadraticCurveTo(canvas.width-80,250,canvas.width-60,300); ctx.quadraticCurveTo(canvas.width-80,350,canvas.width-120,320); ctx.stroke(); break; } ctx.globalAlpha=1; }catch(e){ ctx.globalAlpha=1; } }
+
+    function calculateRequiredHeight(ctx, canvasWidth){ 
+        let total = 300;
+
+  if (agendaItems.length > 0) {
+    ctx.font = '16px Microsoft JhengHei';
+
+    // Header block + column header row
+    let agendaH = 75 /* section title area */ + 35 /* gap */ + 45 /* column header row */;
+
+    // === Column geometry (responsive, non-overlapping) ===
+    const tableOuterLeft = 40;        // outer table background left edge
+    const tableOuterRight = canvasWidth - 40; // outer table background right edge
+    const innerPad = 20;              // inner left/right breathing room inside the table
+    const innerLeft = tableOuterLeft + innerPad;      // 60 when width=800
+    const innerRight = tableOuterRight - innerPad;    // 740 when width=800
+    const innerWidth = innerRight - innerLeft;        // 680 when width=800
+
+    // Column width ratios (sum = 1.0)
+    const wTime = Math.round(innerWidth * 0.1765);     // ≈120 at 800px
+    const wTopic = Math.round(innerWidth * 0.4412);    // ≈300
+    const wSpeaker = Math.round(innerWidth * 0.2059);  // ≈140
+    const wModerator = innerWidth - wTime - wTopic - wSpeaker; // remainder (≈120)
+
+    // Slight inner text padding so wrapping looks nicer
+    const pad = 10;
+
+    agendaItems.forEach(item => {
+      const topicLines = calculateTextLinesWithBreaks(ctx, item.topic, Math.max(10, wTopic - pad));
+      const speakerLines = item.speaker ? calculateTextLinesWithBreaks(ctx, item.speaker, Math.max(10, wSpeaker - pad)) : 1;
+      const moderatorLines = item.moderator ? calculateTextLinesWithBreaks(ctx, item.moderator, Math.max(10, wModerator - pad)) : 1;
+      const timeLines = calculateTextLinesWithBreaks(ctx, item.time, Math.max(10, wTime - pad));
+
+      const maxLines = Math.max(topicLines, speakerLines, moderatorLines, timeLines);
+      const rowH = Math.max(50, maxLines * 22 + 16);
+      agendaH += rowH;
+    });
+
+    total += agendaH + 40;
+  }
+
+  // Footer note height (if any)
+  const showFooter = document.getElementById('showFooterNote')?.checked;
+  const txt = (document.getElementById('footerNoteContent')?.value || '').trim();
+  if (showFooter && txt) {
+    ctx.font = '11px Microsoft JhengHei';
+    const noteW = canvasWidth - 80;
+    const noteLines = calculateTextLinesWithBreaks(ctx, txt, noteW);
+    const noteH = 0 + (noteLines * 1); // 減少尾端空白
+    total += noteH;
+  }
+
+  total += 5; // bottom padding
+  return Math.max(total, 600);
+    }
+
+    // 取得當前配色方案（動態更新自訂配色）
+    function getActiveColorScheme() {
+      if (currentColorScheme === 'custom') {
+        return {
+          header: { 
+            colors: [customColors.headerC1, customColors.headerC2, customColors.headerC3], 
+            text: '#FFFFFF' 
+          }, 
+          agenda: { 
+            background: customColors.agendaBg, 
+            border: customColors.agendaBorder, 
+            accent: customColors.agendaAccent 
+          }
+        };
+      }
+      return colorSchemes[currentColorScheme];
+    }
+
+    function drawPosterToCanvas(ctx, W, H){
+        let total = 300;
+
+  if (agendaItems.length > 0) {
+    ctx.font = '16px Microsoft JhengHei';
+
+    // Header block + column header row
+    let agendaH = 75 /* section title area */ + 35 /* gap */ + 45 /* column header row */;
+
+    // === Column geometry (responsive, non-overlapping) ===
+    const tableOuterLeft = 40;        // outer table background left edge
+    const tableOuterRight = W - 40; // outer table background right edge
+    const innerPad = 20;              // inner left/right breathing room inside the table
+    const innerLeft = tableOuterLeft + innerPad;      // 60 when width=800
+    const innerRight = tableOuterRight - innerPad;    // 740 when width=800
+    const innerWidth = innerRight - innerLeft;        // 680 when width=800
+
+    // Column width ratios (sum = 1.0)
+    const wTime = Math.round(innerWidth * 0.1765);     // ≈120 at 800px
+    const wTopic = Math.round(innerWidth * 0.4412);    // ≈300
+    const wSpeaker = Math.round(innerWidth * 0.2059);  // ≈140
+    const wModerator = innerWidth - wTime - wTopic - wSpeaker; // remainder (≈120)
+
+    // Slight inner text padding so wrapping looks nicer
+    const pad = 10;
+
+    agendaItems.forEach(item => {
+      const topicLines = calculateTextLinesWithBreaks(ctx, item.topic, Math.max(10, wTopic - pad));
+      const speakerLines = item.speaker ? calculateTextLinesWithBreaks(ctx, item.speaker, Math.max(10, wSpeaker - pad)) : 1;
+      const moderatorLines = item.moderator ? calculateTextLinesWithBreaks(ctx, item.moderator, Math.max(10, wModerator - pad)) : 1;
+      const timeLines = calculateTextLinesWithBreaks(ctx, item.time, Math.max(10, wTime - pad));
+
+      const maxLines = Math.max(topicLines, speakerLines, moderatorLines, timeLines);
+      const rowH = Math.max(50, maxLines * 22 + 16);
+      agendaH += rowH;
+    });
+
+    total += agendaH + 40;
+  }
+
+  // Footer note height (if any)
+  const showFooter = document.getElementById('showFooterNote')?.checked;
+  const txt = (document.getElementById('footerNoteContent')?.value || '').trim();
+  if (showFooter && txt) {
+    ctx.font = '11px Microsoft JhengHei';
+    const noteW = canvasWidth - 80;
+    const noteLines = calculateTextLinesWithBreaks(ctx, txt, noteW);
+    const noteH = 20 + (noteLines * 15);
+    total += noteH;
+  }
+
+  total += 5; // bottom padding
+  return Math.max(total, 600);
+}
+
+function drawPosterToCanvas(ctx, W, H) {
+  const scheme = getActiveColorScheme();
+  const template = templates[currentTemplate];
+
+  // === Background (with optional custom gradient) ===
+  if (currentColorScheme === 'custom' && customColors.bgGradientDir !== 'none') {
+    ctx.fillStyle = createGradient(ctx, W, H, [customColors.bgC1, customColors.bgC2], customColors.bgGradientDir);
+  } else {
+    ctx.fillStyle = currentColorScheme === 'custom' ? customColors.bgC1 : '#fff';
+  }
+  ctx.fillRect(0, 0, W, H);
+
+  // === Header wave ===
+  const headerHeight = 120;
+  ctx.fillStyle = createGradient(ctx, W, headerHeight, scheme.header.colors, currentGradientDirection);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(W, 0);
+  ctx.lineTo(W, 100);
+  ctx.quadraticCurveTo(W * 0.75, 130, W * 0.5, 110);
+  ctx.quadraticCurveTo(W * 0.25, 90, 0, 120);
+  ctx.closePath();
+  ctx.fill();
+
+  const title = (document.getElementById('conferenceTitle').value || `${template.title}醫學會議`);
+  ctx.fillStyle = scheme.header.text;
+  ctx.font = 'bold 36px Microsoft JhengHei';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, W / 2, 50);
+
+  const subtitle = document.getElementById('conferenceSubtitle').value;
+  if (subtitle) {
+    ctx.font = '20px Microsoft JhengHei';
+    ctx.fillText(subtitle, W / 2, 85);
+  }
+
+  // === Info (date/place) ===
+  const infoCardY = 140, infoCardH = 80;
+  const date = document.getElementById('conferenceDate').value;
+  const location = document.getElementById('conferenceLocation').value;
+  ctx.fillStyle = '#333';
+  ctx.font = '18px Microsoft JhengHei';
+  ctx.textAlign = 'left';
+  if (date) ctx.fillText('📅 ' + date, 60, infoCardY + 30);
+  if (location) ctx.fillText('🏢 ' + location, 60, infoCardY + 60);
+
+  // === Agenda ===
+  let afterAgendaY = infoCardY + infoCardH + 40;
+  if (agendaItems.length > 0) {
+    const agendaStartY = afterAgendaY;
+
+    // Section title bar
+    ctx.fillStyle = scheme.agenda.background;
+    ctx.fillRect(30, agendaStartY - 20, W - 60, 40);
+    ctx.fillStyle = scheme.agenda.border;
+    ctx.font = 'bold 26px Microsoft JhengHei';
+    ctx.textAlign = 'center';
+    ctx.fillText('議程安排', W / 2, agendaStartY + 5);
+
+    // === Column geometry (responsive, non-overlapping) ===
+    const tableOuterLeft = 40;
+    const tableOuterRight = W - 40;
+    const innerPad = 20; // breathing room at both sides
+    const innerLeft = tableOuterLeft + innerPad;      // 60
+    const innerRight = tableOuterRight - innerPad;    // W-60
+    const innerWidth = innerRight - innerLeft;        // W-120
+
+    const wTime = Math.round(innerWidth * 0.1765);     // ≈120
+    const wTopic = Math.round(innerWidth * 0.4412);    // ≈300
+    const wSpeaker = Math.round(innerWidth * 0.2059);  // ≈140
+    const wModerator = innerWidth - wTime - wTopic - wSpeaker; // remainder (keeps total exact)
+
+    const xTime = innerLeft;
+    const xTopic = xTime + wTime;
+    const xSpeaker = xTopic + wTopic;
+    const xModerator = xSpeaker + wSpeaker; // will end at innerRight
+
+    const cTime = xTime + wTime / 2;
+    const cTopic = xTopic + wTopic / 2;
+    const cSpeaker = xSpeaker + wSpeaker / 2;
+    const cModerator = xModerator + wModerator / 2;
+
+// Column header row
+    let yPos = agendaStartY + 50;
+    ctx.fillStyle = scheme.agenda.accent;
+    ctx.fillRect(tableOuterLeft, yPos - 8, W - 80, 35);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 16px Microsoft JhengHei';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time', cTime, yPos + 15);
+    ctx.fillText('Content', cTopic, yPos + 15);
+    ctx.fillText('Speaker', cSpeaker, yPos + 15);
+    ctx.fillText('Moderator', cModerator, yPos + 15);
+
+    yPos += 45; // space for column header row
+
+// Body rows － 支援自動換行與垂直置中
+agendaItems.forEach((item, idx) => {
+  ctx.font = '16px Microsoft JhengHei';
+  const pad = 10;
+
+  // 先用與計高一致的方式算行數，得到同一個 row 高度
+  const timeLines = calculateTextLinesWithBreaks(ctx, item.time, wTime - pad);
+  const topicLines = calculateTextLinesWithBreaks(ctx, item.topic, wTopic - pad);
+  const speakerLines = item.speaker ? calculateTextLinesWithBreaks(ctx, item.speaker, wSpeaker - pad) : 1;
+  const moderatorLines = item.moderator ? calculateTextLinesWithBreaks(ctx, item.moderator, wModerator - pad) : 1;
+  const maxLines = Math.max(timeLines, topicLines, speakerLines, moderatorLines);
+  const itemH = Math.max(45, maxLines * 22 + 15);
+
+  // 斑馬紋底色
+  if (idx % 2 === 0) {
+    ctx.fillStyle = scheme.agenda.background;
+    ctx.fillRect(tableOuterLeft, yPos - 18, W - 80, itemH);
+  }
+
+  // 為了用絕對座標繪字，切回 left 對齊（真正水平置中的位移由函式計算）
+  ctx.textAlign = 'left';
+
+  // Time
+  ctx.fillStyle = scheme.agenda.accent;
+  ctx.font = 'bold 16px Microsoft JhengHei';
+  drawCenteredTextWithBreaks(
+    ctx,
+    item.time || '',
+    xTime + pad / 2,         // 欄位左緣 + 內距
+    yPos - 18,               // 欄位頂
+    wTime - pad,             // 可用寬度
+    22,                      // 行高
+    itemH,                   // 儲存格高度（用來垂直置中）
+    'center'                 // 水平置中
+  );
+
+  // Topic
+  ctx.fillStyle = '#333';
+  ctx.font = '16px Microsoft JhengHei';
+  drawCenteredTextWithBreaks(
+    ctx,
+    item.topic || '',
+    xTopic + pad / 2,
+    yPos - 18,
+    wTopic - pad,
+    22,
+    itemH,
+    'center'
+  );
+
+  // Speaker
+  ctx.fillStyle = scheme.agenda.accent;
+  ctx.font = '14px Microsoft JhengHei';
+  drawCenteredTextWithBreaks(
+    ctx,
+    item.speaker || '',
+    xSpeaker + pad / 2,
+    yPos - 18,
+    wSpeaker - pad,
+    20,
+    itemH,
+    'center'
+  );
+
+  // Moderator
+  ctx.fillStyle = scheme.agenda.border;
+  ctx.font = '14px Microsoft JhengHei';
+  drawCenteredTextWithBreaks(
+    ctx,
+    item.moderator || '',
+    xModerator + pad / 2,
+    yPos - 18,
+    wModerator - pad,
+    20,
+    itemH,
+    'center'
+  );
+
+  yPos += itemH + 5;
+});
+
+    afterAgendaY = yPos + 10;
+  }
+
+  // === Footer note (no border) ===
+  const showFooter = document.getElementById('showFooterNote')?.checked;
+  const noteText = (document.getElementById('footerNoteContent')?.value || '').trim();
+  if (showFooter && noteText) {
+    const noteX = 40, noteW = W - 80, noteY = afterAgendaY + 20;
+    ctx.fillStyle = '#333';
+    ctx.font = '11px Microsoft JhengHei';
+    ctx.textAlign = 'left';
+    const lines = calculateTextLinesWithBreaks(ctx, noteText, noteW);
+    const contentH = lines * 15;
+    wrapTextWithBreaks(ctx, noteText, noteX, noteY, noteW, 15);
+    afterAgendaY = noteY + contentH;
+  }
+
+  // On-theme subtle iconography
+  drawCancerDecorations(ctx, template, { width: W, height: H });
+
+  // PNG overlays from bottom to top
+  overlays.forEach((ov, idx) => drawOverlay(ctx, ov, idx === selectedOverlayIndex));
+    }
+
+    function updatePoster(){ const canvas=getCanvas(); const ctx=getCtx(); const temp = document.createElement('canvas'); temp.width=canvas.width; temp.height=2000; const tctx=temp.getContext('2d'); const needH = calculateRequiredHeight(tctx, canvas.width); if(canvas.height!==needH){ canvas.height = needH; }
+      // 確保選取物件仍在畫布內
+      if(selectedOverlayIndex>=0){ const ov=overlays[selectedOverlayIndex]; ov.x = Math.max(0, Math.min(canvas.width, ov.x)); ov.y = Math.max(0, Math.min(canvas.height, ov.y)); }
+      drawPosterToCanvas(ctx, canvas.width, canvas.height);
+    }
+
+    function downloadPoster(){ try{ const c=getCanvas(); const scale=4.8, w=c.width*scale, h=c.height*scale; const u=document.createElement('canvas'); u.width=w; u.height=h; const ux=u.getContext('2d'); ux.imageSmoothingEnabled=true; ux.imageSmoothingQuality='high'; ux.scale(scale,scale); drawPosterToCanvas(ux, c.width, c.height); const a=document.createElement('a'); a.download=`${templates[currentTemplate].title}_會議海報_UHD_${new Date().toISOString().slice(0,10)}.png`; a.href=u.toDataURL('image/png',1.0); document.body.appendChild(a); a.click(); document.body.removeChild(a); }catch(e){ const c=getCanvas(); const a=document.createElement('a'); a.download=`${templates[currentTemplate].title}_會議海報_${new Date().toISOString().slice(0,10)}.png`; a.href=c.toDataURL('image/png'); document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+    }
+
+    // ====== 互動：PNG 圖層在主畫布（拖拉/縮放/旋轉）======
+    function overlaySize(ov){ return { w: ov.w*ov.scaleX, h: ov.h*ov.scaleY }; }
+    function toLocal(ov, pt){ const dx = pt.x - ov.x, dy = pt.y - ov.y; const cos=Math.cos(-ov.rotation), sin=Math.sin(-ov.rotation); return { x: dx*cos - dy*sin, y: dx*sin + dy*cos } }
+    function toGlobal(ov, lp){ const cos=Math.cos(ov.rotation), sin=Math.sin(ov.rotation); return { x: ov.x + (lp.x*cos - lp.y*sin), y: ov.y + (lp.x*sin + lp.y*cos) } }
+
+    function handlePositions(ov){ const s=overlaySize(ov); const hw=s.w/2, hh=s.h/2; return [
+      {name:'nw', x:-hw, y:-hh}, {name:'n', x:0, y:-hh}, {name:'ne', x:hw, y:-hh},
+      {name:'e', x:hw, y:0}, {name:'se', x:hw, y:hh}, {name:'s', x:0, y:hh},
+      {name:'sw', x:-hw, y:hh}, {name:'w', x:-hw, y:0}
+    ]; }
+    function rotateHandle(ov){ const s=overlaySize(ov); return {name:'rot', x:0, y:-(s.h/2)-30}; }
+
+    function drawOverlay(ctx, ov, selected){ if(!ov.img || !ov.visible) return; const s=overlaySize(ov);
+      ctx.save(); ctx.globalAlpha=ov.opacity; ctx.translate(ov.x, ov.y); ctx.rotate(ov.rotation);
+      // 使用裁切：從來源裁切矩形 (ov.crop) 繪製到目標大小 s.w x s.h
+      const cx=ov.crop.x, cy=ov.crop.y, cw=ov.crop.w, ch=ov.crop.h;
+      ctx.drawImage(ov.img, cx, cy, cw, ch, -s.w/2, -s.h/2, s.w, s.h);
+      ctx.restore();
+
+      if(selected){ ctx.save(); ctx.translate(ov.x, ov.y); ctx.rotate(ov.rotation);
+        // 邊框
+        ctx.strokeStyle='rgba(0,0,0,.7)'; ctx.lineWidth=1; ctx.setLineDash([6,4]); ctx.strokeRect(-s.w/2, -s.h/2, s.w, s.h); ctx.setLineDash([]);
+        // 八個縮放把手
+        const hs = handlePositions(ov); ctx.fillStyle='#fff'; ctx.strokeStyle='rgba(0,0,0,.85)'; hs.forEach(h=>{ ctx.beginPath(); ctx.rect(h.x-6, h.y-6, 12, 12); ctx.fill(); ctx.stroke(); });
+        // 旋轉把手
+        const rot = rotateHandle(ov); ctx.beginPath(); ctx.moveTo(0, -s.h/2); ctx.lineTo(0, rot.y+12); ctx.stroke(); ctx.beginPath(); ctx.arc(rot.x, rot.y, 8, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.restore(); }
+    }
+
+    function hitTestOverlay(p){ // 回傳 {idx, hit:'none'|'move'|'rotate'|'scale', handle?:name}
+      for(let i=overlays.length-1;i>=0;i--){ const ov=overlays[i]; if(!ov.visible) continue; const s=overlaySize(ov); const lp=toLocal(ov, p); const hw=s.w/2, hh=s.h/2; // 旋轉把手
+        const rot = toGlobal(ov, rotateHandle(ov)); const dist = Math.hypot(p.x-rot.x, p.y-rot.y); if(dist<=12) return {idx:i, hit:'rotate'};
+        // 把手
+        const hs=handlePositions(ov); for(const h of hs){ const gh=toGlobal(ov, h); if(Math.abs(p.x-gh.x)<=10 && Math.abs(p.y-gh.y)<=10) return {idx:i, hit:'scale', handle:h.name}; }
+        // 內部（拖曳）
+        if(Math.abs(lp.x)<=hw && Math.abs(lp.y)<=hh) return {idx:i, hit:'move'};
+      }
+      return {idx:-1, hit:'none'};
+    }
+
+    const drag = { mode:'none', idx:-1, start:{x:0,y:0}, startOv:null, handle:null, startAngle:0 };
+
+    function onPointerDown(e){ const c=getCanvas(); c.setPointerCapture(e.pointerId); const p=canvasPoint(e); const res = hitTestOverlay(p); drag.mode=res.hit; drag.idx=res.idx; drag.handle=res.handle||null; drag.start = p; if(res.idx>=0){ selectedOverlayIndex = res.idx; refreshOverlayList(); syncOverlayControls(); const ov = overlays[res.idx]; drag.startOv = JSON.parse(JSON.stringify(ov)); // 深拷貝
+      if(drag.mode==='rotate'){ drag.startAngle = Math.atan2(p.y - ov.y, p.x - ov.x); }
+    } else { selectedOverlayIndex=-1; refreshOverlayList(); syncOverlayControls(); }
+      updatePoster();
+    }
+    function onPointerMove(e){ const c=getCanvas(); const p=canvasPoint(e); if(drag.idx<0) return; const ov=overlays[drag.idx]; if(drag.mode==='move'){ ov.x += (p.x - drag.start.x); ov.y += (p.y - drag.start.y); drag.start = p; updatePoster(); }
+      else if(drag.mode==='rotate'){ const a = Math.atan2(p.y - ov.y, p.x - ov.x); ov.rotation = drag.startOv.rotation + (a - drag.startAngle); updatePoster(); }
+      else if(drag.mode==='scale'){ // 支援解鎖比例：八向調整
+        const lp = toLocal(ov, p); const s0 = overlaySize(drag.startOv); const s = overlaySize(ov); let sx = drag.startOv.scaleX, sy = drag.startOv.scaleY; const hw0=s0.w/2, hh0=s0.h/2; const lock = ov.lockAspect;
+        function clamp(v){ return Math.max(0.05, Math.min(50, v)); }
+        switch(drag.handle){
+          case 'n': if(lock){ const ry = Math.abs(lp.y)/hh0; sx=clamp(drag.startOv.scaleX*ry); sy=sx; } else { const ry = Math.abs(lp.y)/hh0; sy=clamp(drag.startOv.scaleY*ry); } break;
+          case 's': if(lock){ const ry = Math.abs(lp.y)/hh0; sx=clamp(drag.startOv.scaleX*ry); sy=sx; } else { const ry = Math.abs(lp.y)/hh0; sy=clamp(drag.startOv.scaleY*ry); } break;
+          case 'e': if(lock){ const rx = Math.abs(lp.x)/hw0; sx=clamp(drag.startOv.scaleX*rx); sy=sx; } else { const rx = Math.abs(lp.x)/hw0; sx=clamp(drag.startOv.scaleX*rx); } break;
+          case 'w': if(lock){ const rx = Math.abs(lp.x)/hw0; sx=clamp(drag.startOv.scaleX*rx); sy=sx; } else { const rx = Math.abs(lp.x)/hw0; sx=clamp(drag.startOv.scaleX*rx); } break;
+          default: // 四角
+            if(lock){ const rx = Math.abs(lp.x)/hw0; const ry = Math.abs(lp.y)/hh0; const r = Math.max(rx, ry); sx=clamp(drag.startOv.scaleX*r); sy=sx; }
+            else { const rx = Math.abs(lp.x)/hw0; const ry = Math.abs(lp.y)/hh0; sx=clamp(drag.startOv.scaleX*rx); sy=clamp(drag.startOv.scaleY*ry); }
+        }
+        ov.scaleX=sx; ov.scaleY=sy; updatePoster();
+      }
+    }
+    function onPointerUp(e){ drag.mode='none'; drag.idx=-1; drag.startOv=null; drag.handle=null; }
+    function canvasPoint(evt){ const rect=getCanvas().getBoundingClientRect(); return { x:(evt.clientX-rect.left), y:(evt.clientY-rect.top) } }
+
+    function bindCanvasInteractions(){ const c=getCanvas(); c.addEventListener('pointerdown', onPointerDown); c.addEventListener('pointermove', onPointerMove); c.addEventListener('pointerup', onPointerUp); c.addEventListener('pointercancel', onPointerUp); c.addEventListener('wheel', (e)=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; e.preventDefault(); const delta=(e.deltaY<0)?1.06:0.94; ov.scaleX=Math.max(0.05, Math.min(20, ov.scaleX*delta)); ov.scaleY = ov.lockAspect ? ov.scaleX : Math.max(0.05, Math.min(20, ov.scaleY*delta)); updatePoster(); }, {passive:false}); }
+
+    // ====== 裁切器（獨立畫布，以原圖像素為主）======
+    const cropper = { open:false, scale:1, offsetX:0, offsetY:0, imgW:0, imgH:0, rect:{x:0,y:0,w:0,h:0}, mode:'none', start:{x:0,y:0}, hit:'' };
+
+    function openCropper(){ const ov=overlays[selectedOverlayIndex]; if(!ov) return; const backdrop=document.getElementById('cropperBackdrop'); const cvs=document.getElementById('cropperCanvas'); const ctx=cvs.getContext('2d');
+      // 計算縮放：將原圖完整置於畫布內
+      cropper.imgW = ov.w; cropper.imgH = ov.h; const pad=30; const scaleX=(cvs.width-2*pad)/ov.w; const scaleY=(cvs.height-2*pad)/ov.h; cropper.scale=Math.min(scaleX, scaleY, 1); cropper.offsetX=(cvs.width - ov.w*cropper.scale)/2; cropper.offsetY=(cvs.height - ov.h*cropper.scale)/2;
+      // 初始裁切框 = 現有 ov.crop
+      cropper.rect = { x: ov.crop.x, y: ov.crop.y, w: ov.crop.w, h: ov.crop.h };
+      cropper.open=true; backdrop.style.display='flex'; drawCropper();
+    }
+    function closeCropper(){ document.getElementById('cropperBackdrop').style.display='none'; cropper.open=false; }
+    function resetCropper(){ const ov=overlays[selectedOverlayIndex]; if(!ov) return; cropper.rect = {x:0,y:0,w:ov.w,h:ov.h}; drawCropper(); }
+
+    function drawCropper(){ const cvs=document.getElementById('cropperCanvas'); const ctx=cvs.getContext('2d'); const ov=overlays[selectedOverlayIndex]; if(!ov) return; ctx.clearRect(0,0,cvs.width,cvs.height);
+      // 畫原圖
+      ctx.drawImage(ov.img, 0, 0, ov.w, ov.h, cropper.offsetX, cropper.offsetY, ov.w*cropper.scale, ov.h*cropper.scale);
+      // 遮罩
+      ctx.save(); ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fillRect(cropper.offsetX, cropper.offsetY, ov.w*cropper.scale, ov.h*cropper.scale);
+      // 清出裁切框區域
+      ctx.globalCompositeOperation='destination-out'; const r=cropper.rect; ctx.fillRect(cropper.offsetX + r.x*cropper.scale, cropper.offsetY + r.y*cropper.scale, r.w*cropper.scale, r.h*cropper.scale); ctx.restore();
+      // 畫裁切框
+      ctx.save(); ctx.strokeStyle='#10b981'; ctx.lineWidth=2; ctx.setLineDash([6,4]); ctx.strokeRect(cropper.offsetX + r.x*cropper.scale, cropper.offsetY + r.y*cropper.scale, r.w*cropper.scale, r.h*cropper.scale); ctx.setLineDash([]);
+      // 角與邊把手
+      const hs = cropHandlesPx(); ctx.fillStyle='#ffffff'; ctx.strokeStyle='#111827'; hs.forEach(h=>{ ctx.beginPath(); ctx.rect(h.x-6, h.y-6, 12, 12); ctx.fill(); ctx.stroke(); });
+      ctx.restore();
+    }
+
+    function cropHandlesPx(){ const r=cropper.rect, s=cropper.scale, ox=cropper.offsetX, oy=cropper.offsetY; const pts=[
+      {name:'nw', x:ox+r.x*s, y:oy+r.y*s}, {name:'n', x:ox+(r.x+r.w/2)*s, y:oy+r.y*s}, {name:'ne', x:ox+(r.x+r.w)*s, y:oy+r.y*s},
+      {name:'e', x:ox+(r.x+r.w)*s, y:oy+(r.y+r.h/2)*s}, {name:'se', x:ox+(r.x+r.w)*s, y:oy+(r.y+r.h)*s}, {name:'s', x:ox+(r.x+r.w/2)*s, y:oy+(r.y+r.h)*s},
+      {name:'sw', x:ox+r.x*s, y:oy+(r.y+r.h)*s}, {name:'w', x:ox+r.x*s, y:oy+(r.y+r.h/2)*s}
+    ]; return pts; }
+
+    function hitCropper(px,py){ const hs=cropHandlesPx(); for(const h of hs){ if(Math.abs(px-h.x)<=10 && Math.abs(py-h.y)<=10) return {hit:'handle', name:h.name}; }
+      // 內部拖曳
+      const r=cropper.rect, s=cropper.scale, ox=cropper.offsetX, oy=cropper.offsetY; const x0=ox+r.x*s, y0=oy+r.y*s, x1=x0+r.w*s, y1=y0+r.h*s; if(px>=x0 && px<=x1 && py>=y0 && py<=y1) return {hit:'inside'}; return {hit:'none'}; }
+
+    function clampRect(rect, maxW, maxH){ const r={...rect}; if(r.w<5) r.w=5; if(r.h<5) r.h=5; if(r.x<0) r.x=0; if(r.y<0) r.y=0; if(r.x+r.w>maxW) r.x = Math.max(0, maxW - r.w); if(r.y+r.h>maxH) r.y = Math.max(0, maxH - r.h); return r; }
+
+    function onCropperDown(e){ const rect=document.getElementById('cropperCanvas').getBoundingClientRect(); const px=e.clientX-rect.left, py=e.clientY-rect.top; const res=hitCropper(px,py); cropper.mode=res.hit; cropper.hit=res.name||''; cropper.start={x:px,y:py}; }
+    function onCropperMove(e){ if(cropper.mode==='none') return; const cvs=document.getElementById('cropperCanvas'); const ov=overlays[selectedOverlayIndex]; const rect=cvs.getBoundingClientRect(); const px=e.clientX-rect.left, py=e.clientY-rect.top; const dx=px-cropper.start.x, dy=py-cropper.start.y; const s=cropper.scale; let r={...cropper.rect};
+      const applyHandle=(name)=>{ switch(name){
+        case 'n': r.y += dy/s; r.h -= dy/s; break; case 's': r.h += dy/s; break; case 'w': r.x += dx/s; r.w -= dx/s; break; case 'e': r.w += dx/s; break;
+        case 'nw': r.x += dx/s; r.w -= dx/s; r.y += dy/s; r.h -= dy/s; break; case 'ne': r.w += dx/s; r.y += dy/s; r.h -= dy/s; break; case 'sw': r.x += dx/s; r.w -= dx/s; r.h += dy/s; break; case 'se': r.w += dx/s; r.h += dy/s; break; }
+      };
+      if(cropper.mode==='inside'){ r.x += dx/s; r.y += dy/s; }
+      else if(cropper.mode==='handle'){ applyHandle(cropper.hit); }
+      cropper.rect = clampRect(r, ov.w, ov.h); cropper.start={x:px,y:py}; drawCropper();
+    }
+    function onCropperUp(){ cropper.mode='none'; cropper.hit=''; }
+
+    // ====== 自訂配色控制 ======
+    function syncCustomColors() {
+      document.getElementById('headerC1').value = customColors.headerC1;
+      document.getElementById('headerC2').value = customColors.headerC2;
+      document.getElementById('headerC3').value = customColors.headerC3;
+      document.getElementById('agendaBg').value = customColors.agendaBg;
+      document.getElementById('agendaBorder').value = customColors.agendaBorder;
+      document.getElementById('agendaAccent').value = customColors.agendaAccent;
+      document.getElementById('bgC1').value = customColors.bgC1;
+      document.getElementById('bgC2').value = customColors.bgC2;
+      document.getElementById('bgGradientDir').value = customColors.bgGradientDir;
+    }
+
+    function applyCustomColors() {
+      customColors.headerC1 = document.getElementById('headerC1').value;
+      customColors.headerC2 = document.getElementById('headerC2').value;
+      customColors.headerC3 = document.getElementById('headerC3').value;
+      customColors.agendaBg = document.getElementById('agendaBg').value;
+      customColors.agendaBorder = document.getElementById('agendaBorder').value;
+      customColors.agendaAccent = document.getElementById('agendaAccent').value;
+      customColors.bgC1 = document.getElementById('bgC1').value;
+      customColors.bgC2 = document.getElementById('bgC2').value;
+      customColors.bgGradientDir = document.getElementById('bgGradientDir').value;
+      
+      if (currentColorScheme === 'custom') {
+        updatePoster();
+      }
+    }
+
+    function toggleCustomSection(show) {
+      const section = document.getElementById('customColorsSection');
+      if (show) {
+        section.classList.add('show');
+        syncCustomColors();
+      } else {
+        section.classList.remove('show');
+      }
+    }
+
+    // ====== 事件/UI 綁定 ======
+    function initUI(){
+      // 分頁切換（懶人版）
+      document.querySelectorAll('.tab-btn').forEach(btn=>{
+        btn.onclick = function(){
+          document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+          document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+          this.classList.add('active');
+          document.getElementById(this.dataset.tab).classList.add('active');
+        };
+      });
+    
+      // 會議基本
+      document.querySelectorAll('.template-btn').forEach(btn=> btn.onclick=function(){ document.querySelectorAll('.template-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active'); const t=this.dataset.template; if(t!==currentTemplate){ currentTemplate=t; document.getElementById('conferenceSubtitle').value=`${templates[currentTemplate].title}治療新進展論壇`; agendaItems=[...templates[currentTemplate].sampleItems]; refreshAgendaList(); updatePoster(); } else { updatePoster(); } });
+      
+      document.getElementById('colorScheme').onchange = (e)=>{ 
+        currentColorScheme=e.target.value; 
+        toggleCustomSection(currentColorScheme === 'custom');
+        updatePoster(); 
+      };
+      
+      document.getElementById('gradientDir').onchange = (e)=>{ currentGradientDirection=e.target.value; updatePoster(); };
+      
+      // 自訂配色控制
+      document.getElementById('applyCustomColors').onclick = applyCustomColors;
+
+      // 議程（包含主持人欄位，改為支援多行）
+      document.getElementById('agendaAdd').onclick = ()=>{ 
+        const time=document.getElementById('agendaTime').value.trim(), 
+              topic=document.getElementById('agendaTopic').value.trim(), 
+              speaker=document.getElementById('agendaSpeaker').value.trim(),
+              moderator=document.getElementById('agendaModerator').value.trim(); // 新增主持人欄位
+        
+        if(!time||!topic){ 
+          [document.getElementById('agendaTime'),document.getElementById('agendaTopic')].forEach(i=>{ 
+            if(!i.value) { 
+              i.style.borderColor='#dc3545'; 
+              setTimeout(()=> i.style.borderColor='#e0e0e0',1200); 
+            } 
+          }); 
+          return; 
+        }
+        
+        if(document.getElementById('agendaAdd').dataset.edit){ 
+          const i=parseInt(document.getElementById('agendaAdd').dataset.edit); 
+          agendaItems[i]={time,topic,speaker,moderator}; // 包含主持人
+          document.getElementById('agendaAdd').textContent='➕ 新增'; 
+          delete document.getElementById('agendaAdd').dataset.edit; 
+        } else { 
+          agendaItems.push({time,topic,speaker,moderator}); // 包含主持人
+        }
+        
+        document.getElementById('agendaTime').value=document.getElementById('agendaTopic').value=document.getElementById('agendaSpeaker').value=document.getElementById('agendaModerator').value=''; // 清空主持人欄位
+        refreshAgendaList(); 
+        updatePoster(); 
+      };
+      
+      document.getElementById('agendaSample').onclick = ()=>{ agendaItems=[...templates[currentTemplate].sampleItems]; refreshAgendaList(); updatePoster(); };
+      document.getElementById('agendaClear').onclick = ()=>{ agendaItems=[]; refreshAgendaList(); updatePoster(); };
+
+      // PNG 檔上傳
+      document.getElementById('overlayFile').addEventListener('change', e=>{ const files=[...e.target.files]; files.forEach(f=>{ const reader=new FileReader(); reader.onload=()=>{ const img=new Image(); img.onload=()=> newOverlayFromImage(img, f.name, reader.result); img.src=reader.result; }; reader.readAsDataURL(f); }); e.target.value=''; });
+
+      // 層級控制
+      document.getElementById('bringFront').onclick = ()=>{ if(selectedOverlayIndex<0) return; const ov=overlays.splice(selectedOverlayIndex,1)[0]; overlays.push(ov); selectedOverlayIndex=overlays.length-1; refreshOverlayList(); updatePoster(); };
+      document.getElementById('bringForward').onclick = ()=>{ if(selectedOverlayIndex<0) return; const i=selectedOverlayIndex; if(i<overlays.length-1){ [overlays[i],overlays[i+1]]=[overlays[i+1],overlays[i]]; selectedOverlayIndex=i+1; refreshOverlayList(); updatePoster(); } };
+      document.getElementById('sendBackward').onclick = ()=>{ if(selectedOverlayIndex<0) return; const i=selectedOverlayIndex; if(i>0){ [overlays[i],overlays[i-1]]=[overlays[i-1],overlays[i]]; selectedOverlayIndex=i-1; refreshOverlayList(); updatePoster(); } };
+      document.getElementById('sendBack').onclick = ()=>{ if(selectedOverlayIndex<0) return; const ov=overlays.splice(selectedOverlayIndex,1)[0]; overlays.unshift(ov); selectedOverlayIndex=0; refreshOverlayList(); updatePoster(); };
+
+      // 選中圖層屬性
+      document.getElementById('overlayOpacity').oninput = (e)=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; ov.opacity=parseFloat(e.target.value||'1'); updatePoster(); };
+      document.getElementById('overlayVisible').onchange = (e)=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; ov.visible=e.target.checked; refreshOverlayList(); updatePoster(); };
+      document.getElementById('overlayLockAspect').onchange = (e)=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; ov.lockAspect=e.target.checked; if(ov.lockAspect){ // 對齊 scaleY 到 scaleX
+          ov.scaleY = ov.scaleX; updatePoster(); }
+      };
+      document.getElementById('centerOverlay').onclick = ()=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; const c=getCanvas(); ov.x=c.width/2; ov.y=c.height/2; updatePoster(); };
+      document.getElementById('resetOverlay').onclick = ()=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; const c=getCanvas(); ov.scaleX = Math.max(0.05, (c.width*0.4)/ov.w); ov.scaleY = ov.lockAspect ? ov.scaleX : Math.max(0.05, (c.width*0.4)/ov.w); ov.rotation=0; updatePoster(); };
+      document.getElementById('removeOverlay').onclick = ()=>{ if(selectedOverlayIndex<0) return; if(confirm('移除目前 PNG 圖層？')){ overlays.splice(selectedOverlayIndex,1); if(selectedOverlayIndex>=overlays.length) selectedOverlayIndex=overlays.length-1; refreshOverlayList(); syncOverlayControls(); updatePoster(); } };
+
+      // 裁切
+      document.getElementById('openCropper').onclick = openCropper; document.getElementById('closeCropper').onclick = closeCropper; document.getElementById('resetCropper').onclick = resetCropper; document.getElementById('applyCropper').onclick = ()=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; const r=cropper.rect; // 最小值保護
+        ov.crop = { x:Math.round(r.x), y:Math.round(r.y), w:Math.round(Math.max(1,r.w)), h:Math.round(Math.max(1,r.h)) }; closeCropper(); updatePoster(); };
+      document.getElementById('resetCrop').onclick = ()=>{ const ov=overlays[selectedOverlayIndex]; if(!ov) return; ov.crop={x:0,y:0,w:ov.w,h:ov.h}; updatePoster(); };
+
+      // 作圖控制
+      document.getElementById('btnUpdate').onclick = updatePoster; document.getElementById('btnDownload').onclick = downloadPoster;
+    }
+
+    function bindCropperInteractions(){ const cvs=document.getElementById('cropperCanvas'); cvs.addEventListener('pointerdown', (e)=>{ const rect=cvs.getBoundingClientRect(); const px=e.clientX-rect.left, py=e.clientY-rect.top; const res=hitCropper(px,py); cropper.mode=res.hit; cropper.hit=res.name||''; cropper.start={x:px,y:py}; });
+      cvs.addEventListener('pointermove', onCropperMove); cvs.addEventListener('pointerup', onCropperUp); cvs.addEventListener('pointercancel', onCropperUp);
+    }
+
+    function exportState() {
+      const state = {
+        conference: {
+          title: document.getElementById('conferenceTitle').value,
+          subtitle: document.getElementById('conferenceSubtitle').value,
+          date: document.getElementById('conferenceDate').value,
+          location: document.getElementById('conferenceLocation').value
+        },
+        template: currentTemplate,
+        colorScheme: currentColorScheme,
+        gradientDir: currentGradientDirection,
+        customColors,
+        agendaItems,
+        overlays: overlays.map(ov => ({
+          ...ov,
+          img: undefined, // 圖片物件不存，只存 dataURL
+          src: ov.src
+        })),
+        footer: {
+          show: document.getElementById('showFooterNote').checked,
+          content: document.getElementById('footerNoteContent').value
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `poster_state_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function importState() {
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'application/json';
+      inp.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const state = JSON.parse(reader.result);
+
+            // 套用會議資訊
+            document.getElementById('conferenceTitle').value = state.conference.title || '';
+            document.getElementById('conferenceSubtitle').value = state.conference.subtitle || '';
+            document.getElementById('conferenceDate').value = state.conference.date || '';
+            document.getElementById('conferenceLocation').value = state.conference.location || '';
+
+            currentTemplate = state.template || 'lung';
+            currentColorScheme = state.colorScheme || 'medical_green';
+            currentGradientDirection = state.gradientDir || 'horizontal';
+            customColors = state.customColors || customColors;
+
+            agendaItems = state.agendaItems || [];
+            refreshAgendaList();
+
+            overlays = [];
+            if (state.overlays) {
+              state.overlays.forEach(ov => {
+                const img = new Image();
+                img.onload = ()=> updatePoster();
+                img.src = ov.src;
+                overlays.push({...ov, img});
+              });
+            }
+
+            document.getElementById('showFooterNote').checked = state.footer?.show ?? true;
+            document.getElementById('footerNoteContent').value = state.footer?.content || '';
+
+            updatePoster();
+            alert('✅ 狀態已成功匯入');
+          } catch (err) {
+            alert('❌ 匯入失敗：' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      inp.click();
+    }
+
+    // ====== 初始化 ======
+    window.onload = function(){ const today=new Date(); const y=today.getFullYear(), m=today.getMonth()+1, d=today.getDate(); document.getElementById('conferenceDate').value=`${y}年${m}月${d}日`; document.getElementById('conferenceTitle').value=`${y}年度癌症醫學會議`;
+      agendaItems=[...templates[currentTemplate].sampleItems]; refreshAgendaList(); bindCanvasInteractions(); initUI(); bindCropperInteractions(); updatePoster();
+      document.getElementById('showFooterNote').addEventListener('change', updatePoster); let t=null; document.getElementById('footerNoteContent').addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(updatePoster, 250); }); 
+      
+      // 初始隱藏自訂配色區塊
+      toggleCustomSection(false);
+    };
+  </script>
+</body>
+</html>
